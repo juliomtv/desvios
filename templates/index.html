@@ -99,7 +99,19 @@
             <div class="message error">{{ error }}</div>
         {% endif %}
 
-        <form method="POST">
+	        <form method="POST">
+
+	            <label>Selecione o Galpão:</label>
+	            <div style="display: flex; justify-content: space-around; margin-bottom: 15px;">
+	                <label>
+	                    <input type="radio" name="galpao" value="HB3" required> HB3
+	                </label>
+	                <label>
+	                    <input type="radio" name="galpao" value="HB1/HB2" required> HB1/HB2
+	                </label>
+	            </div>
+
+
 
 
             <label for="desvio_tipo">Tipo de Desvio (Ex: Procedimento Incorreto, Falha de Comunicação):</label>
@@ -113,7 +125,7 @@
     </div>
 
     <div class="download-link">
-        <p>Acesso para Supervisores:</p>
+        <p>Acesso para Capitães de Segurança:</p>
         <a href="{{ url_for('login') }}">Dashboard e Relatório</a>
     </div>
 </body>
