@@ -39,7 +39,7 @@ def initialize_data_file(data_file):
         # Adicionando a coluna 'galpao' para garantir a consistência, embora o arquivo já seja separado
         columns = ['timestamp', 'desvio_tipo', 'descricao', 'galpao']
         df = pd.DataFrame(columns=columns)
-        df.to_csv(data_file, index=False)
+        df.to_csv(data_file, index=False, sep=';')
 
 # Inicializa os dois arquivos de dados
 initialize_data_file(DATA_FILE_HB3)
@@ -77,10 +77,10 @@ def index():
             # Garante que o arquivo exista com o cabeçalho correto
             initialize_data_file(data_file)
 
-            df = pd.read_csv(data_file)
+            df = pd.read_csv(data_file, sep=';')
             new_df = pd.DataFrame([new_entry])
             df = pd.concat([df, new_df], ignore_index=True)
-            df.to_csv(data_file, index=False)
+            df.to_csv(data_file, index=False, sep=';')
             # Redireciona para evitar reenvio do formulário
             return redirect(url_for('index'))
         except Exception as e:
@@ -130,7 +130,7 @@ def dashboard():
         return redirect(url_for('login'))
 
     try:
-        df = pd.read_csv(data_file)
+        df = pd.read_csv(data_file, sep=';')
     except pd.errors.EmptyDataError:
         # Se o arquivo estiver vazio, retorna um dashboard sem dados
         return render_template('dashboard.html', galpao=galpao_acesso, data_analysis={'top_desvios': [], 'bottom_desvios': []})
@@ -171,7 +171,7 @@ def download_data():
 
     # Gera o arquivo XLSX
     try:
-        df = pd.read_csv(data_file)
+        df = pd.read_csv(data_file, sep=';')
     except pd.errors.EmptyDataError:
         # Se o arquivo estiver vazio, retorna uma mensagem de erro
         return "Nenhum dado para exportar.", 404
