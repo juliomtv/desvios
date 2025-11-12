@@ -104,7 +104,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>Dashboard de Desvios</h1>
+        <h1>Dashboard de Desvios - Galpão {{ galpao }}</h1>
         <div>
             <a href="{{ url_for('logout') }}">Sair</a>
             <a href="{{ url_for('index') }}">Formulário</a>
@@ -142,7 +142,7 @@
         </div>
 
         <div class="download-section">
-            <p>Clique abaixo para baixar o relatório completo em formato XLSX (Excel):</p>
+            <p>Clique abaixo para baixar o relatório completo do Galpão {{ galpao }} em formato XLSX (Excel):</p>
             <a href="{{ url_for('download_data') }}">Baixar Relatório Completo (XLSX)</a>
         </div>
     </div>
