@@ -22,17 +22,28 @@ def verify_password(username, password):
             check_password_hash(users.get(username), password):
         return username
     return None
-DATA_FILE = os.path.join(app.root_path, 'data', 'desvios.csv')
+DATA_FILE_HB3 = os.path.join(app.root_path, 'data', 'desvios_hb3.csv')
+DATA_FILE_HB1HB2 = os.path.join(app.root_path, 'data', 'desvios_hb1hb2.csv')
+
+def get_data_file(galpao):
+    if galpao == 'HB3':
+        return DATA_FILE_HB3
+    elif galpao == 'HB1/HB2':
+        return DATA_FILE_HB1HB2
+    return None
 
 # Garante que o arquivo de dados exista com cabeçalhos
-def initialize_data_file():
-    if not os.path.exists(DATA_FILE):
+def initialize_data_file(data_file):
+    if not os.path.exists(data_file):
         # Definindo as colunas para o relatório de desvios
-        columns = ['timestamp', 'desvio_tipo', 'descricao']
+        # Adicionando a coluna 'galpao' para garantir a consistência, embora o arquivo já seja separado
+        columns = ['timestamp', 'desvio_tipo', 'descricao', 'galpao']
         df = pd.DataFrame(columns=columns)
-        df.to_csv(DATA_FILE, index=False)
+        df.to_csv(data_file, index=False)
 
-initialize_data_file()
+# Inicializa os dois arquivos de dados
+initialize_data_file(DATA_FILE_HB3)
+initialize_data_file(DATA_FILE_HB1HB2)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -40,21 +51,36 @@ def index():
         # Coleta os dados do formulário
         desvio_tipo = request.form.get('desvio_tipo')
         descricao = request.form.get('descricao')
+        galpao = request.form.get('galpao') # Novo campo para o galpão
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        if not galpao:
+            return render_template('index.html', error="Selecione o galpão para o desvio.")
+
+        data_file = get_data_file(galpao)
+        if not data_file:
+            return render_template('index.html', error="Galpão inválido selecionado.")
 
         # Cria um novo registro
         new_entry = {
             'timestamp': timestamp,
             'desvio_tipo': desvio_tipo,
-            'descricao': descricao
+            'descricao': descricao,
+            'galpao': galpao # Adiciona o galpão ao registro
         }
 
         # Adiciona ao CSV
         try:
-            df = pd.read_csv(DATA_FILE)
+            # Garante que o diretório 'data' exista
+            os.makedirs(os.path.dirname(data_file), exist_ok=True)
+            
+            # Garante que o arquivo exista com o cabeçalho correto
+            initialize_data_file(data_file)
+
+            df = pd.read_csv(data_file)
             new_df = pd.DataFrame([new_entry])
             df = pd.concat([df, new_df], ignore_index=True)
-            df.to_csv(DATA_FILE, index=False)
+            df.to_csv(data_file, index=False)
             # Redireciona para evitar reenvio do formulário
             return redirect(url_for('index'))
         except Exception as e:
@@ -72,9 +98,15 @@ def login():
         password = request.form.get('password')
         
         # Verifica a senha usando a função de verificação
+        galpao_login = request.form.get('galpao_login') # Novo campo para o galpão no login
+
         if username in users and check_password_hash(users.get(username), password):
-            session['logged_in'] = True
-            return redirect(url_for('dashboard'))
+            if galpao_login in ['HB3', 'HB1/HB2']:
+                session['logged_in'] = True
+                session['galpao_acesso'] = galpao_login # Salva o galpão de acesso na sessão
+                return redirect(url_for('dashboard'))
+            else:
+                return render_template('login.html', error='Selecione o galpão para acesso.')
         else:
             return render_template('login.html', error='Usuário ou senha inválidos.')
     return render_template('login.html')
@@ -89,11 +121,19 @@ def dashboard():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     
+    galpao_acesso = session.get('galpao_acesso')
+    data_file = get_data_file(galpao_acesso)
+
+    if not data_file:
+        # Isso não deve acontecer se o login for bem-sucedido, mas é uma segurança
+        session.pop('logged_in', None)
+        return redirect(url_for('login'))
+
     try:
-        df = pd.read_csv(DATA_FILE)
+        df = pd.read_csv(data_file)
     except pd.errors.EmptyDataError:
         # Se o arquivo estiver vazio, retorna um dashboard sem dados
-        return render_template('dashboard.html', data_analysis={'top_desvios': [], 'bottom_desvios': []})
+        return render_template('dashboard.html', galpao=galpao_acesso, data_analysis={'top_desvios': [], 'bottom_desvios': []})
 
     # Análise de Frequência de Desvios
     if not df.empty:
@@ -116,16 +156,22 @@ def dashboard():
     else:
         data_analysis = {'top_desvios': [], 'bottom_desvios': []}
 
-    return render_template('dashboard.html', data_analysis=data_analysis)
+    return render_template('dashboard.html', galpao=galpao_acesso, data_analysis=data_analysis)
 
 @app.route('/download')
 def download_data():
     if not session.get('logged_in'):
         return redirect(url_for('login'))
     
+    galpao_acesso = session.get('galpao_acesso')
+    data_file = get_data_file(galpao_acesso)
+
+    if not data_file:
+        return "Erro: Galpão de acesso não definido na sessão.", 400
+
     # Gera o arquivo XLSX
     try:
-        df = pd.read_csv(DATA_FILE)
+        df = pd.read_csv(data_file)
     except pd.errors.EmptyDataError:
         # Se o arquivo estiver vazio, retorna uma mensagem de erro
         return "Nenhum dado para exportar.", 404
@@ -136,11 +182,12 @@ def download_data():
     # Escreve o DataFrame no buffer como XLSX
     # Não é possível adicionar senha ao arquivo XLSX diretamente com pandas/openpyxl
     # A proteção é feita pela rota de login
-    df.to_excel(output, index=False, sheet_name='Relatorio_Desvios', engine='openpyxl')
+    df.to_excel(output, index=False, sheet_name=f'Relatorio_Desvios_{galpao_acesso.replace("/", "_")}', engine='openpyxl')
     output.seek(0)
     
     # Envia o arquivo
-    return send_file(output, as_attachment=True, download_name='relatorio_desvios.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    download_name = f'relatorio_desvios_{galpao_acesso.replace("/", "_")}.xlsx'
+    return send_file(output, as_attachment=True, download_name=download_name, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 if __name__ == '__main__':
     # Para rodar em produção, use um servidor WSGI como Gunicorn
